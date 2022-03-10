@@ -1,0 +1,75 @@
+# This workflow will build and push a new container image to JFrog,
+# and then will update an ECS service using a reference of an already existing task definition
+#
+# To use this workflow, you will need to complete the following set-up steps:
+#
+# 1. Create an EC2 instance that will be used to run these steps
+#    Associate the newly created instance as your workflow runner by following these steps: https://docs.github.com/en/actions/hosting-your-own-runners/using-self-hosted-runners-in-a-workflow
+#
+# 2. Create a JFrog user that can login with an auth token
+#    Run the "Docker login" on your EC2 instance and use your JFrog username and password 
+#
+# 3. Create an ECS task definition, an ECS cluster, and an ECS service.
+#    For example, follow the Getting Started guide on the ECS console:
+#      https://us-east-2.console.aws.amazon.com/ecs/home?region=us-east-2#/firstRun
+#    Replace the values for `service` and `cluster` in the workflow below with your service and cluster names.
+#
+#
+# 4. Your docker image builds should be tagged with your JFrog repo.
+#
+# 5. Reference your ECS cluster name, service name and task definition arn on the "Deploy Amazon ECS task definition" step of the "Publish and deploy" job.
+#    The format should be like so: aws ecs update-service --cluster <your cluster name> --service <your service name> --task-definition <arn of task defiinition>  --desired-count <Desired count of ecs tasks within your service>
+
+on:
+  push:
+    branches:
+      - develop
+
+name: Deploy to Amazon ECS
+
+jobs:
+  Checkout:
+    name: Code Checkout
+    runs-on: self-hosted, uat-builds
+    environment: uat
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+
+  Build:
+    name: Code build
+    needs: Checkout
+    runs-on: self-hosted, uat-builds
+    environment: uat
+
+    steps:
+      - name: Docker login to JFrog
+        run: cat ~/jfrog-repo-token | docker login --username architecture-and-engineering --password-stdin artifacts.bcp.absa.co.za/architecture-and-engineering-docker-local
+
+      - name: Build docker image
+        id: build-image
+        run: docker build --build-arg http_proxy=http://proxy.ctonetwrkprod.aws.dsarena.com:3128 --build-arg https_proxy=http://proxy.ctonetwrkprod.aws.dsarena.com:3128 -t artifacts.bcp.absa.co.za/architecture-and-engineering-docker-local/kudos-web:latest .
+
+  Deploy:
+    name: Publish and deploy
+    needs: Build
+    runs-on: self-hosted, uat-builds
+    environment: uat
+
+    steps:
+      - name: Push docker image to the JFrog repo
+        run: docker push artifacts.bcp.absa.co.za/architecture-and-engineering-docker-local/kudos-web:latest
+
+      - name: Deploy Amazon ECS task definition
+        run: aws ecs update-service --cluster uat-kudos-softeng-cluster --service uat-kudos-softeng-web-svc --task-definition arn:aws:ecs:af-south-1:558260051993:task-definition/uat-kudos-softeng-web:1  --desired-count 1 --deployment-configuration "deploymentCircuitBreaker={enable=true, rollback=true},maximumPercent=200,minimumHealthyPercent=100" --force-new-deployment
+
+  Teardown:
+    name: Tear down job resources
+    needs: Deploy
+    runs-on: self-hosted, uat-builds
+    environment: uat
+    if: always()
+    steps:
+      - name: Remove built docker images.
+        run: docker rmi -f $(docker images |awk '!/harbor/' |awk 'NR>1 {print $3}')

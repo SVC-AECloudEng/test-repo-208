@@ -1,0 +1,30 @@
+<mat-card>
+    <mat-card-header class="d-flex justify-content-center">
+        <mat-card-title>LOGIN TO USE BASE PROJECT SITE</mat-card-title>
+    </mat-card-header>
+
+    <mat-card-content>
+        <form [formGroup]="loginForm" (ngSubmit)="onLogin()">
+            <mat-form-field appearance="outline" class="w-100">
+                <mat-label>AB Number</mat-label>
+                <input matInput placeholder="Enter your Absa Number" formControlName="username" required/>
+                <mat-error *ngIf="loginForm.hasError('required')"></mat-error>
+                <mat-icon matSuffix color="primary">face</mat-icon>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="w-100 pb-1">
+                <mat-label>Password</mat-label>
+                <input matInput placeholder="Enter your corp domain password" [type]="hide ? 'password' : 'text'" formControlName="password" required>
+                <button type="button" mat-icon-button matSuffix (click)="hide = !hide" [attr.aria-label]="'Hide password'" [attr.aria-pressed]="hide">
+                    <mat-icon color="primary">{{hide ? 'visibility_off' : 'visibility'}}</mat-icon>
+                </button>
+            </mat-form-field>
+
+            <p class="text-danger text-center" *ngIf="errorMessage">{{errorMessage}}</p>
+
+            <div class="d-flex justify-content-center">
+                <mat-bar-button (btnClick)="onLogin()" [options]="btnOptions"></mat-bar-button>
+            </div>
+        </form>
+    </mat-card-content>
+</mat-card>
